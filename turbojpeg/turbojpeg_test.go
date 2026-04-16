@@ -135,6 +135,38 @@ func TestDecodeRGBA_Rows(t *testing.T) {
 	}
 }
 
+func TestDecodeYCbCr(t *testing.T) {
+	data := loadTestJPEG(t)
+	img, err := DecodeYCbCr(data, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if img.Width == 0 || img.Height == 0 {
+		t.Fatalf("unexpected zero dimensions: %dx%d", img.Width, img.Height)
+	}
+	if len(img.Y) == 0 {
+		t.Fatal("Y plane is empty")
+	}
+	t.Logf("DecodeYCbCr: %dx%d yStride=%d cStride=%d subsamp=%d Y=%d Cb=%d Cr=%d",
+		img.Width, img.Height, img.YStride, img.CStride, img.Subsample,
+		len(img.Y), len(img.Cb), len(img.Cr))
+}
+
+func TestDecodeYCbCr_YRows(t *testing.T) {
+	data := loadTestJPEG(t)
+	img, err := DecodeYCbCr(data, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	yRows := img.YRows()
+	if len(yRows) != img.Height {
+		t.Fatalf("YRows() returned %d rows, expected %d", len(yRows), img.Height)
+	}
+	if &yRows[0][0] != &img.Y[0] {
+		t.Fatal("YRows() does not share backing memory with Y")
+	}
+}
+
 func TestDecodeCorruptData(t *testing.T) {
 	_, err := DecodeRGBA([]byte{0xFF, 0xD8, 0x00, 0x00}, nil)
 	if err == nil {
