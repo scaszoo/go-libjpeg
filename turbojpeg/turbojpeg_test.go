@@ -414,6 +414,24 @@ func TestReencode_NilInput(t *testing.T) {
 	}
 }
 
+func TestScalingFactors(t *testing.T) {
+	factors := ScalingFactors()
+	if len(factors) == 0 {
+		t.Fatal("no scaling factors returned")
+	}
+	found := map[string]bool{}
+	for _, f := range factors {
+		key := fmt.Sprintf("%d/%d", f.Num, f.Denom)
+		found[key] = true
+	}
+	for _, expect := range []string{"1/1", "1/2", "1/4", "1/8"} {
+		if !found[expect] {
+			t.Errorf("missing expected scaling factor %s", expect)
+		}
+	}
+	t.Logf("ScalingFactors: %d factors available", len(factors))
+}
+
 func TestConcurrentDecodeEncode(t *testing.T) {
 	data := loadTestJPEG(t)
 	const goroutines = 8
