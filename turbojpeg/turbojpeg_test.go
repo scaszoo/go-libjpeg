@@ -173,3 +173,130 @@ func TestDecodeCorruptData(t *testing.T) {
 		t.Fatal("expected error for corrupt data")
 	}
 }
+
+func TestEncodeRGBA(t *testing.T) {
+	data := loadTestJPEG(t)
+	img, err := DecodeRGBA(data, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jpeg, err := EncodeRGBA(img.Pix, img.Width, img.Height, img.Stride,
+		&EncodeOptions{Quality: 90})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jpeg) == 0 {
+		t.Fatal("encoded JPEG is empty")
+	}
+	if jpeg[0] != 0xFF || jpeg[1] != 0xD8 {
+		t.Fatalf("invalid JPEG header: %02x %02x", jpeg[0], jpeg[1])
+	}
+	t.Logf("EncodeRGBA: %d bytes (input %d pixels)", len(jpeg), len(img.Pix))
+}
+
+func TestEncodeRGB(t *testing.T) {
+	data := loadTestJPEG(t)
+	img, err := DecodeRGB(data, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jpeg, err := EncodeRGB(img.Pix, img.Width, img.Height, img.Stride, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if jpeg[0] != 0xFF || jpeg[1] != 0xD8 {
+		t.Fatalf("invalid JPEG header: %02x %02x", jpeg[0], jpeg[1])
+	}
+}
+
+func TestEncodeGray(t *testing.T) {
+	data := loadTestJPEG(t)
+	img, err := DecodeGray(data, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jpeg, err := EncodeGray(img.Pix, img.Width, img.Height, img.Stride, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if jpeg[0] != 0xFF || jpeg[1] != 0xD8 {
+		t.Fatalf("invalid JPEG header: %02x %02x", jpeg[0], jpeg[1])
+	}
+}
+
+func TestEncodeYCbCr(t *testing.T) {
+	data := loadTestJPEG(t)
+	img, err := DecodeYCbCr(data, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jpeg, err := EncodeYCbCr(img.Y, img.Cb, img.Cr, img.YStride, img.CStride,
+		img.Width, img.Height, img.Subsample, &EncodeOptions{Quality: 85})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if jpeg[0] != 0xFF || jpeg[1] != 0xD8 {
+		t.Fatalf("invalid JPEG header: %02x %02x", jpeg[0], jpeg[1])
+	}
+	t.Logf("EncodeYCbCr: %d bytes", len(jpeg))
+}
+
+func TestEncodeRGBA_DstBufReuse(t *testing.T) {
+	data := loadTestJPEG(t)
+	img, err := DecodeRGBA(data, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jpeg1, err := EncodeRGBA(img.Pix, img.Width, img.Height, img.Stride,
+		&EncodeOptions{Quality: 85})
+	if err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]byte, len(jpeg1)*2)
+	jpeg2, err := EncodeRGBA(img.Pix, img.Width, img.Height, img.Stride,
+		&EncodeOptions{Quality: 85, DstBuf: buf})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jpeg1) != len(jpeg2) {
+		t.Fatalf("size mismatch: %d vs %d", len(jpeg1), len(jpeg2))
+	}
+	if &jpeg2[0] != &buf[0] {
+		t.Fatal("DstBuf was not reused")
+	}
+}
+
+func TestRoundtrip_RGBA(t *testing.T) {
+	data := loadTestJPEG(t)
+	img1, err := DecodeRGBA(data, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jpeg, err := EncodeRGBA(img1.Pix, img1.Width, img1.Height, img1.Stride,
+		&EncodeOptions{Quality: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	img2, err := DecodeRGBA(jpeg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if img1.Width != img2.Width || img1.Height != img2.Height {
+		t.Fatalf("dimensions changed: %dx%d -> %dx%d",
+			img1.Width, img1.Height, img2.Width, img2.Height)
+	}
+	maxDiff := 0
+	for i := range img1.Pix {
+		d := int(img1.Pix[i]) - int(img2.Pix[i])
+		if d < 0 {
+			d = -d
+		}
+		if d > maxDiff {
+			maxDiff = d
+		}
+	}
+	if maxDiff > 30 {
+		t.Fatalf("round-trip max pixel diff %d exceeds tolerance 30", maxDiff)
+	}
+	t.Logf("round-trip max pixel diff: %d", maxDiff)
+}
