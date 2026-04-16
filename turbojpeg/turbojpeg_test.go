@@ -414,6 +414,31 @@ func TestReencode_NilInput(t *testing.T) {
 	}
 }
 
+func TestConcurrentDecodeEncode(t *testing.T) {
+	data := loadTestJPEG(t)
+	const goroutines = 8
+	errs := make(chan error, goroutines)
+
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			img, err := DecodeRGBA(data, nil)
+			if err != nil {
+				errs <- err
+				return
+			}
+			_, err = EncodeRGBA(img.Pix, img.Width, img.Height, img.Stride,
+				&EncodeOptions{Quality: 85})
+			errs <- err
+		}()
+	}
+
+	for i := 0; i < goroutines; i++ {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // --- Benchmarks (Go 1.24+ b.Loop()) ---
 
 func BenchmarkDecodeRGBA(b *testing.B) {
