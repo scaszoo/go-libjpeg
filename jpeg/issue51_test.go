@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/pixiv/go-libjpeg/jpeg"
+	"github.com/scaszoo/go-libjpeg/jpeg"
 )
 
-// https://github.com/pixiv/go-libjpeg/issues/51
+// https://github.com/scaszoo/go-libjpeg/issues/51
 func TestIssue51(t *testing.T) {
 	data := []byte("\xff\xd8\xff\xdb\x00C\x000000000000000" +
 		"00000000000000000000" +
