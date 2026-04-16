@@ -1,8 +1,13 @@
 package turbojpeg
 
 import (
+	"bytes"
+	"fmt"
+	stdjpeg "image/jpeg"
 	"os"
 	"testing"
+
+	oldjpeg "github.com/scaszoo/go-libjpeg/jpeg"
 )
 
 func loadTestJPEG(t *testing.T) []byte {
@@ -408,3 +413,178 @@ func TestReencode_NilInput(t *testing.T) {
 		t.Fatal("expected error for nil input")
 	}
 }
+
+// --- Benchmarks (Go 1.24+ b.Loop()) ---
+
+func BenchmarkDecodeRGBA(b *testing.B) {
+	data, _ := os.ReadFile("testdata/cosmos.jpg")
+	b.ResetTimer()
+	for b.Loop() {
+		DecodeRGBA(data, nil)
+	}
+}
+
+func BenchmarkDecodeRGB(b *testing.B) {
+	data, _ := os.ReadFile("testdata/cosmos.jpg")
+	b.ResetTimer()
+	for b.Loop() {
+		DecodeRGB(data, nil)
+	}
+}
+
+func BenchmarkDecodeGray(b *testing.B) {
+	data, _ := os.ReadFile("testdata/cosmos.jpg")
+	b.ResetTimer()
+	for b.Loop() {
+		DecodeGray(data, nil)
+	}
+}
+
+func BenchmarkDecodeYCbCr(b *testing.B) {
+	data, _ := os.ReadFile("testdata/cosmos.jpg")
+	b.ResetTimer()
+	for b.Loop() {
+		DecodeYCbCr(data, nil)
+	}
+}
+
+func BenchmarkDecodeRGBA_BufferReuse(b *testing.B) {
+	data, _ := os.ReadFile("testdata/cosmos.jpg")
+	img, _ := DecodeRGBA(data, nil)
+	buf := make([]byte, len(img.Pix))
+	opts := &DecodeOptions{DstBuf: buf}
+	b.ResetTimer()
+	for b.Loop() {
+		DecodeRGBA(data, opts)
+	}
+}
+
+func BenchmarkDecodeRGBA_ScaledHalf(b *testing.B) {
+	data, _ := os.ReadFile("testdata/cosmos.jpg")
+	opts := &DecodeOptions{Scale: &ScalingFactor{Num: 1, Denom: 2}}
+	b.ResetTimer()
+	for b.Loop() {
+		DecodeRGBA(data, opts)
+	}
+}
+
+func BenchmarkDecodeRGBA_ScaledQuarter(b *testing.B) {
+	data, _ := os.ReadFile("testdata/cosmos.jpg")
+	opts := &DecodeOptions{Scale: &ScalingFactor{Num: 1, Denom: 4}}
+	b.ResetTimer()
+	for b.Loop() {
+		DecodeRGBA(data, opts)
+	}
+}
+
+func BenchmarkDecodeRGBA_ScaledEighth(b *testing.B) {
+	data, _ := os.ReadFile("testdata/cosmos.jpg")
+	opts := &DecodeOptions{Scale: &ScalingFactor{Num: 1, Denom: 8}}
+	b.ResetTimer()
+	for b.Loop() {
+		DecodeRGBA(data, opts)
+	}
+}
+
+func BenchmarkEncodeRGBA(b *testing.B) {
+	data, _ := os.ReadFile("testdata/cosmos.jpg")
+	img, _ := DecodeRGBA(data, nil)
+	b.ResetTimer()
+	for b.Loop() {
+		EncodeRGBA(img.Pix, img.Width, img.Height, img.Stride,
+			&EncodeOptions{Quality: 85})
+	}
+}
+
+func BenchmarkEncodeRGB(b *testing.B) {
+	data, _ := os.ReadFile("testdata/cosmos.jpg")
+	img, _ := DecodeRGB(data, nil)
+	b.ResetTimer()
+	for b.Loop() {
+		EncodeRGB(img.Pix, img.Width, img.Height, img.Stride,
+			&EncodeOptions{Quality: 85})
+	}
+}
+
+func BenchmarkEncodeGray(b *testing.B) {
+	data, _ := os.ReadFile("testdata/cosmos.jpg")
+	img, _ := DecodeGray(data, nil)
+	b.ResetTimer()
+	for b.Loop() {
+		EncodeGray(img.Pix, img.Width, img.Height, img.Stride,
+			&EncodeOptions{Quality: 85})
+	}
+}
+
+func BenchmarkEncodeYCbCr(b *testing.B) {
+	data, _ := os.ReadFile("testdata/cosmos.jpg")
+	img, _ := DecodeYCbCr(data, nil)
+	b.ResetTimer()
+	for b.Loop() {
+		EncodeYCbCr(img.Y, img.Cb, img.Cr, img.YStride, img.CStride,
+			img.Width, img.Height, img.Subsample, &EncodeOptions{Quality: 85})
+	}
+}
+
+func BenchmarkRoundtrip_DecodeEncode(b *testing.B) {
+	data, _ := os.ReadFile("testdata/cosmos.jpg")
+	opts := &EncodeOptions{Quality: 85}
+	b.ResetTimer()
+	for b.Loop() {
+		img, _ := DecodeRGBA(data, nil)
+		EncodeRGBA(img.Pix, img.Width, img.Height, img.Stride, opts)
+	}
+}
+
+func BenchmarkRoundtrip_Reencode(b *testing.B) {
+	data, _ := os.ReadFile("testdata/cosmos.jpg")
+	opts := &EncodeOptions{Quality: 85}
+	b.ResetTimer()
+	for b.Loop() {
+		Reencode(data, opts)
+	}
+}
+
+func BenchmarkExtractQuantTables(b *testing.B) {
+	data, _ := os.ReadFile("testdata/cosmos.jpg")
+	b.ResetTimer()
+	for b.Loop() {
+		ExtractQuantTables(data)
+	}
+}
+
+// --- Comparison: old pixiv package ---
+
+func BenchmarkDecodeRGBA_OldPixiv(b *testing.B) {
+	data, _ := os.ReadFile("testdata/cosmos.jpg")
+	b.ResetTimer()
+	for b.Loop() {
+		r := bytes.NewReader(data)
+		oldjpeg.Decode(r, &oldjpeg.DecoderOptions{})
+	}
+}
+
+func BenchmarkRoundtrip_OldPixiv(b *testing.B) {
+	data, _ := os.ReadFile("testdata/cosmos.jpg")
+	b.ResetTimer()
+	for b.Loop() {
+		r := bytes.NewReader(data)
+		img, _ := oldjpeg.Decode(r, &oldjpeg.DecoderOptions{})
+		var buf bytes.Buffer
+		oldjpeg.Encode(&buf, img, &oldjpeg.EncoderOptions{Quality: 85})
+	}
+}
+
+// --- Comparison: Go stdlib ---
+
+func BenchmarkDecodeRGBA_Stdlib(b *testing.B) {
+	data, _ := os.ReadFile("testdata/cosmos.jpg")
+	b.ResetTimer()
+	for b.Loop() {
+		r := bytes.NewReader(data)
+		stdjpeg.Decode(r)
+	}
+}
+
+// Ensure imports are used
+var _ = fmt.Sprintf
