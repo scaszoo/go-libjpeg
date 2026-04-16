@@ -300,3 +300,61 @@ func TestRoundtrip_RGBA(t *testing.T) {
 	}
 	t.Logf("round-trip max pixel diff: %d", maxDiff)
 }
+
+func TestExtractQuantTables(t *testing.T) {
+	data := loadTestJPEG(t)
+	qt, err := ExtractQuantTables(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	allZero := true
+	for _, v := range qt.Luminance {
+		if v != 0 {
+			allZero = false
+			break
+		}
+	}
+	if allZero {
+		t.Fatal("luminance table is all zeros")
+	}
+	t.Logf("Luminance[0]=%d Luminance[63]=%d", qt.Luminance[0], qt.Luminance[63])
+	t.Logf("Chrominance[0]=%d Chrominance[63]=%d", qt.Chrominance[0], qt.Chrominance[63])
+}
+
+func TestExtractQuantTables_NilInput(t *testing.T) {
+	_, err := ExtractQuantTables(nil)
+	if err == nil {
+		t.Fatal("expected error for nil input")
+	}
+}
+
+func TestEncodeRGBA_WithQuantTables(t *testing.T) {
+	data := loadTestJPEG(t)
+	qt, err := ExtractQuantTables(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, err := DecodeRGBA(data, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jpeg, err := EncodeRGBA(img.Pix, img.Width, img.Height, img.Stride,
+		&EncodeOptions{QuantTables: qt})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if jpeg[0] != 0xFF || jpeg[1] != 0xD8 {
+		t.Fatalf("invalid JPEG header: %02x %02x", jpeg[0], jpeg[1])
+	}
+	qt2, err := ExtractQuantTables(jpeg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 64; i++ {
+		if qt.Luminance[i] != qt2.Luminance[i] {
+			t.Fatalf("luminance table mismatch at [%d]: %d vs %d",
+				i, qt.Luminance[i], qt2.Luminance[i])
+		}
+	}
+	t.Logf("QuantTable round-trip verified: tables match")
+}

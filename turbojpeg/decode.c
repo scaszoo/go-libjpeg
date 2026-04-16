@@ -217,3 +217,4 @@ static int decode_yuv_planes_dims(
     tj3Destroy(h);
     return 0;
 }
+
