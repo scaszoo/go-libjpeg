@@ -358,3 +358,53 @@ func TestEncodeRGBA_WithQuantTables(t *testing.T) {
 	}
 	t.Logf("QuantTable round-trip verified: tables match")
 }
+
+func TestReencode(t *testing.T) {
+	data := loadTestJPEG(t)
+	out, err := Reencode(data, &EncodeOptions{Quality: 75})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) == 0 {
+		t.Fatal("reencode output is empty")
+	}
+	if out[0] != 0xFF || out[1] != 0xD8 {
+		t.Fatalf("invalid JPEG header: %02x %02x", out[0], out[1])
+	}
+	t.Logf("Reencode: input=%d bytes, output=%d bytes (Q75)", len(data), len(out))
+}
+
+func TestReencode_MatchesManualRoundtrip(t *testing.T) {
+	data := loadTestJPEG(t)
+	opts := &EncodeOptions{Quality: 80, Subsample: Subsample420}
+
+	reencoded, err := Reencode(data, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	img, err := DecodeRGB(data, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manual, err := EncodeRGB(img.Pix, img.Width, img.Height, img.Stride, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(reencoded) != len(manual) {
+		t.Fatalf("size mismatch: reencode=%d manual=%d", len(reencoded), len(manual))
+	}
+	for i := range reencoded {
+		if reencoded[i] != manual[i] {
+			t.Fatalf("byte mismatch at offset %d", i)
+		}
+	}
+}
+
+func TestReencode_NilInput(t *testing.T) {
+	_, err := Reencode(nil, nil)
+	if err == nil {
+		t.Fatal("expected error for nil input")
+	}
+}
